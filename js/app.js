@@ -33,31 +33,72 @@ function buildNav() {
 }
 
 // ── DASHBOARD ───────────────────────────────────────────
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function monthName(mm) {
+  return MONTH_NAMES[parseInt(mm, 10) - 1] || '';
+}
+
 function renderDashboard(main) {
   const all = getSessions();
-  const poker = all.filter(s => s.category === 'poker');
-  const other = all.filter(s => s.category === 'other');
-  const year = new Date().getFullYear().toString();
-  const yearSessions = all.filter(s => s.date.startsWith(year));
+  const years = getYears();
 
   main.innerHTML = `
-    <h2>Dashboard</h2>
+    <div class="page-header">
+      <h2>Dashboard</h2>
+    </div>
+    <div class="filters">
+      <select id="dashYear">
+        <option value="">All Years</option>
+        ${years.map(y => `<option value="${y}">${y}</option>`).join('')}
+      </select>
+      <select id="dashMonth">
+        <option value="">All Months</option>
+        ${MONTH_NAMES.map((m, i) => `<option value="${String(i + 1).padStart(2, '0')}">${m}</option>`).join('')}
+      </select>
+    </div>
+    <div id="dashContent"></div>
+  `;
+
+  function applyFilters() {
+    const year = document.getElementById('dashYear').value;
+    const month = document.getElementById('dashMonth').value;
+    let filtered = all;
+    if (year) filtered = filtered.filter(s => s.date.startsWith(year));
+    if (month) filtered = filtered.filter(s => s.date.slice(5, 7) === month);
+    renderDashboardContent(filtered, document.getElementById('dashContent'), year, month);
+  }
+
+  document.getElementById('dashYear').addEventListener('change', applyFilters);
+  document.getElementById('dashMonth').addEventListener('change', applyFilters);
+  applyFilters();
+}
+
+function renderDashboardContent(sessions, container, year, month) {
+  const poker = sessions.filter(s => s.category === 'poker');
+  const other = sessions.filter(s => s.category === 'other');
+  const stats = calcStats(sessions);
+  const periodLabel = year
+    ? (month ? `${monthName(month)} ${year}` : `${year}`)
+    : (month ? monthName(month) : 'All Time');
+
+  container.innerHTML = `
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-label">All-Time Net</div>
-        <div class="stat-value ${calcStats(all).net >= 0 ? 'green' : 'red'}">${formatMoney(calcStats(all).net)}</div>
+        <div class="stat-label">${periodLabel} Net</div>
+        <div class="stat-value ${stats.net >= 0 ? 'green' : 'red'}">${formatMoney(stats.net)}</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">${year} Net (Tax Year)</div>
-        <div class="stat-value ${calcStats(yearSessions).net >= 0 ? 'green' : 'red'}">${formatMoney(calcStats(yearSessions).net)}</div>
+        <div class="stat-label">Sessions</div>
+        <div class="stat-value">${stats.total}</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Total Sessions</div>
-        <div class="stat-value">${all.length}</div>
+        <div class="stat-label">Win Rate</div>
+        <div class="stat-value">${stats.winRate}%</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Overall Win Rate</div>
-        <div class="stat-value">${calcStats(all).winRate}%</div>
+        <div class="stat-label">$/Hour</div>
+        <div class="stat-value ${stats.hourlyRate >= 0 ? 'green' : 'red'}">${formatMoney(stats.hourlyRate)}</div>
       </div>
     </div>
 
@@ -74,7 +115,7 @@ function renderDashboard(main) {
 
     <div class="panel">
       <h3>Recent Sessions</h3>
-      ${recentSessionsTable(all.slice(-10).reverse())}
+      ${recentSessionsTable([...sessions].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10))}
     </div>
 
     <div class="panel">
@@ -83,7 +124,7 @@ function renderDashboard(main) {
     </div>
   `;
 
-  drawChart(all);
+  drawChart(sessions);
 }
 
 function statBlock(sessions) {
